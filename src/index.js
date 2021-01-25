@@ -1,4 +1,5 @@
 const micro = require('micro');
+const R = require('ramda');
 const replies = require('./replies');
 const data = require('./data');
 
@@ -35,7 +36,12 @@ function isGeoAllowed(time) {
 }
 
 function checkAnswer(state, command, version, session) {
-  const welcome = session.new ? 'Приветствую! Механика навыка такая-то.\n' : '';
+
+  const context = state.session && state.session.context || false; /*
+  показывает на какую тему был задан вопрос в предыдущем request-e
+   location access - запросили доступ к геолокации
+   last game - у пользователя есть прогрес в игре и мы справшиваем хочет ли он продолжить старую игру или начать новую
+   */
   
   // default response
   let response = {
@@ -46,36 +52,62 @@ function checkAnswer(state, command, version, session) {
     "version": version
   }
 
-  const userTarget = state.user.data && state.user.data.target || false;
-  if (!userTarget) {
-    // новый пользователь. добавить данные в state.user
-    response["user_state_update"] = data;
+  if (session.new) {
+    response.response["text"] += 'Приветствую! Механика навыка такая-то.\n';
+
   }
 
-  const gpsAccess = state.user.data && state.user.data.gps && state.user.data.gps.endTime || false;
-  if (!gpsAccess || !isGeoAllowed(gpsAccess)) {
+  const userTarget = state.user && state.user.target || false;
+  if (!userTarget) {
+    // новый пользователь. добавить данные в state.user
+    response["user_state_update"] = {
+      target: 1000, 
+      data: {
+        1: {
+          nameObj: 'Тысячелетие России',
+          location: { x: 20, y: 20 },
+          reference: 'Купол железный',
+          isVisited: false
+        },
+      }
+    };
+  }
+
+  const foo = response.session_state && response.session_state.context || false;
+
+  const gpsAccess = state.user.gps && state.user.gps.endTime || false;
+  
+  if ((!gpsAccess || !isGeoAllowed(gpsAccess)) && !(response.session_state && response.session_state.context || false)) {
     // разрешение на доступ гео-локации просрочено или отсутствует
     // запросить разрешение
     response.response["text"] += 'Для работы навыка нужен доступ к гео-локации. Разрешить?';
     response.response["buttons"] = [{ title: 'Да', hide: true }, { title: 'Нет', hide: true }];
+    response.response["directives"] = {"request_geolocation": {}};
     response['session_state'] = {"context": "location access"}; // сохраняем в сессии признак, чтобы потом понять когда не него ответят
   };
+  
+
+  if(userTarget!==1000 && !(response.session_state && response.session_state.context || false)) {
+    response.response["text"] += 'У вас есть загаданный объект. Прододжить или начать новую игру?';
+    response.response["buttons"] = [{ title: 'Продолжить', hide: true }, { title: 'Новая игра', hide: true }];
+    response['session_state'] = {"context": "last game"}; // сохраняем в сессии признак, чтобы потом понять когда не него ответят
+  }
+
 
   // ДА
   if (/да/i.test(command)) {
-    const context = state.session.context;
     // Ответ на запрос по поводу представления доступа к гео-локации
     if(context === "location access") {
       // рассчитать время окончания доступа
       const newEndTime = Date.now() + 1*60*60*1000 // даём доступ на час. час переводим в миллисекунды
       // добавить в state.user.gps
-      response["user_state_update"] = { data: {gps: { endTime: newEndTime } } };
+      response["user_state_update"] = { gps: { endTime: newEndTime } };
+      response['session_state'] = {};
     }
   }
 
   // НЕТ
   if (/нет/i.test(command)) {
-    const context = state.session.context;
     // Ответ на запрос по поводу представления доступа к гео-локации
     if(context === "location access") {
       // выход из навыка
@@ -84,14 +116,38 @@ function checkAnswer(state, command, version, session) {
     }
   }
 
-    // очистить стейт
-    if (command === 'clear all') {
-      response["user_state_update"] = { 
-        data: null,
-        gps: null,
-      };
+  // Продожить
+  if (/продолжить/i.test(command)) {
+    // Ответ на запрос по поводу продолжения предущей игры
+    if(context === "last game") {
+      // Перейти к игре
+      response['session_state'] = {};
+    }
+  }
+
+  // Продожить
+  if (/Новая игра/i.test(command)) {
+    // Ответ на запрос по поводу продолжения предущей игры
+    if(context === "last game") {
+      // Перезапиcать target
+      response["user_state_update"] = { target: 1 };
+
+      // Перейти к игре
+      response['session_state'] = {};
 
     }
+  }
+
+  // очистить стейт
+  if (command === 'clear all') {
+    response["user_state_update"] = { 
+      target: 1,
+      data: null,
+      gps: null,
+    };
+
+  }
+
 
 
   

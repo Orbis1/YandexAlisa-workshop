@@ -2,7 +2,8 @@
   "name": "YandexAlisa-workshop",
   "version": "1.0.0",
   "dependencies": {
-    "micro": "^9.3.4"
+    "micro": "^9.3.4",
+    "ramda": "^0.27.1"
   },
   "devDependencies": {
     "nodemon": "^2.0.4"
