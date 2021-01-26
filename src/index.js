@@ -25,7 +25,7 @@ const server = micro(async (req, res) => {
 
   
 
-  return checkAnswer(state, request.command, version, session)
+  return checkAnswer(state, request.command, version, session, request)
 });
 
 
@@ -35,13 +35,16 @@ function isGeoAllowed(time) {
   return currentTime < time;
 }
 
-function checkAnswer(state, command, version, session) {
+function checkAnswer(state, command, version, session, intent) {
+  // const intents = Object.keys(intent);
 
-  const context = state.session && state.session.context || false; /*
+  
+  const context = state.session && state.session.context; /*
   показывает на какую тему был задан вопрос в предыдущем request-e
    location access - запросили доступ к геолокации
    last game - у пользователя есть прогрес в игре и мы справшиваем хочет ли он продолжить старую игру или начать новую
    */
+  console.log(context);
   
   // default response
   let response = {
@@ -57,8 +60,9 @@ function checkAnswer(state, command, version, session) {
 
   }
 
-  const userTarget = state.user && state.user.target || false;
+  const userTarget = state.user && state.user.target;
   if (!userTarget) {
+    return;
     // новый пользователь. добавить данные в state.user
     response["user_state_update"] = {
       target: 1000, 
@@ -73,21 +77,21 @@ function checkAnswer(state, command, version, session) {
     };
   }
 
-  const foo = response.session_state && response.session_state.context || false;
 
-  const gpsAccess = state.user.gps && state.user.gps.endTime || false;
+  const gpsAccess = state.user.gps && state.user.gps.endTime;
+  console.log(response.session_state && response.session_state.context);
   
-  if ((!gpsAccess || !isGeoAllowed(gpsAccess)) && !(response.session_state && response.session_state.context || false)) {
+  if (!session.location && !(response.session_state && response.session_state.context)) {
     // разрешение на доступ гео-локации просрочено или отсутствует
     // запросить разрешение
-    response.response["text"] += 'Для работы навыка нужен доступ к гео-локации. Разрешить?';
-    response.response["buttons"] = [{ title: 'Да', hide: true }, { title: 'Нет', hide: true }];
+    response.response["text"] += 'Для работы навыка нужен доступ к гео-локации';
+    // response.response["buttons"] = [{ title: 'Да', hide: true }, { title: 'Нет', hide: true }];
     response.response["directives"] = {"request_geolocation": {}};
     response['session_state'] = {"context": "location access"}; // сохраняем в сессии признак, чтобы потом понять когда не него ответят
   };
   
 
-  if(userTarget!==1000 && !(response.session_state && response.session_state.context || false)) {
+  if(userTarget!==1000 && !(response.session_state && response.session_state.context)) {
     response.response["text"] += 'У вас есть загаданный объект. Прододжить или начать новую игру?';
     response.response["buttons"] = [{ title: 'Продолжить', hide: true }, { title: 'Новая игра', hide: true }];
     response['session_state'] = {"context": "last game"}; // сохраняем в сессии признак, чтобы потом понять когда не него ответят
@@ -182,6 +186,10 @@ function checkAnswer(state, command, version, session) {
   // }
 
   // return replies.incorrectAnswer(question);
+
+  const loc = JSON.stringify(session.location);
+  if (loc) response.response["text"] = `\n Ваши координаты ${loc}`;
+  console.log('location', loc);
 
   return response
 }
