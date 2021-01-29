@@ -1,3 +1,6 @@
+const { ASKGEO } = require("./phrases");
+
+//#region 
 /**
  * Приветственное сообщение при входе в навык.
  */
@@ -122,4 +125,118 @@ exports.capitulate = (answer, { number1, number2 }) => {
   function getRandomElement(arr) {
     const index = Math.floor(Math.random() * arr.length);
     return arr[index];
-  } 
+  };
+//#endregion
+// ---------------------------------------------------
+
+function makeResponse({
+  text = "",
+  tts = "",
+  buttons = [],
+  endSession = false,
+  directives = {},
+  context = "",
+  userStateUpdate = {},
+  sightId = "",
+  level = "",
+  prevDistance = "",
+}) {
+  const response = {
+    response: {
+      text: text,
+      tts: tts ? tts : text,
+      buttons: buttons,
+      end_session: endSession,
+      directives: directives,
+    },
+    session_state: {
+      context: context,
+      prevDistance: prevDistance,
+    },
+    user_state_update: userStateUpdate,
+    version: '1.0',
+  };
+
+  console.log("response:", JSON.stringify(response));
+  return response;
+}
+
+exports.clearUserState = (userState) => {
+  const keys = Object.keys(userState);
+  const text = keys.length===0 ? 'User state is empty': JSON.stringify(keys) + 'will be delete';
+  const userStateUpdate = Object.fromEntries(keys.map(item => [item, null]));
+  return makeResponse({ text, userStateUpdate });
+}
+
+
+exports.askGeo = (welcome) => {
+  const directives = { request_geolocation: {} };
+  // const { txt } = ASKGEO;
+  const text = welcome + "\n" + "нужен доступ";
+  return makeResponse({ text, directives });
+}
+
+exports.say = (text, tts, prevDistance) => {
+  const buttons = [{ title: "Далее", hide: true }];
+  return makeResponse({ text, tts, prevDistance, buttons});
+}
+
+exports.sayGeo = (location) => {
+  const { lat, lon, accuracy } = location;
+  const context = "sayGeo";
+  const buttons = [
+    { title: "Сохранить", hide: true },
+    { title: "Далее", hide: true },
+  ];
+  const text = `Ваши координаты: ${lat} северной долготы, ${lon} южной широты. Погрешность ${accuracy}`;
+  return makeResponse({ text, context, buttons });
+}
+
+exports.sayDistance = (userLocation, targetLocation) => {
+  const { lat, lon, accuracy } = userLocation;
+  const { lat: lat1, lon: lon1 } = targetLocation;
+  const distance = Math.trunc(
+    getDistanceFromLatLonInKm(lat, lon, lat1, lon1) * 1000
+  );
+  const context = "sayDistance";
+  const buttons = [{ title: "Далее", hide: true }];
+  const text = `Расстояние до объекта ${distance} ± ${Math.trunc(accuracy)} метров`;
+  return makeResponse({ text, context, buttons });
+}
+
+exports.getDistance = (userLocation, targetLocation) => {
+  const { lat, lon, accuracy } = userLocation;
+  const { lat: lat1, lon: lon1 } = targetLocation;
+  const distance = Math.trunc(
+    getDistanceFromLatLonInKm(lat, lon, lat1, lon1) * 1000
+  );
+
+  return {
+    distance: distance,
+    accuracy: Math.trunc(accuracy)
+  };
+}
+
+function getDistanceFromLatLonInKm(lat1, lon1, lat2, lon2) {
+  var R = 6371; // Radius of the earth in km
+  var dLat = deg2rad(lat2 - lat1); // deg2rad below
+  var dLon = deg2rad(lon2 - lon1);
+  var a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(deg2rad(lat1)) *
+      Math.cos(deg2rad(lat2)) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  var d = R * c; // Distance in km
+  return d;
+}
+
+function deg2rad(deg) {
+  return deg * (Math.PI / 180);
+}
+
+exports.fallback = (command) => {
+  const text = `Вы сказали ${command}. Команда не распознана`;
+  return makeResponse({ text });
+}
