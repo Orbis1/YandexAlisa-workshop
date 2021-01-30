@@ -1,7 +1,7 @@
 const micro = require("micro");
 const R = require("ramda");
 const replies = require("./replies");
-const { WELCOME } = require("./phrases");
+const { WELCOME, KREMLIN, INTRO, ONETYEAR } = require("./phrases");
 
 // достопримечательности с координатами
 const sights = {
@@ -25,37 +25,48 @@ const server = micro(async (req, res) => {
     const { type, command, nlu } = request;
     const intent = nlu && nlu.intents ? Object.keys(nlu.intents) : [];
 
-    console.log("request:", JSON.stringify(request));
-    console.log("state:", JSON.stringify(state));
+    console.log(">>request:", JSON.stringify(request));
+    console.log(">>state:", JSON.stringify(state));
 
-    const welcome = session.new ? 'Привет!' : '';
+    const isNewSession = session.new;
 
     
     if (location) {
-      const {distance, accuracy} = replies.getDistance(location, sights[1].location);
+      // const {distance, accuracy} = replies.getDistance(location, sights[1].location);
       const {session: {prevDistance}} = state;
+      const distance = 0;
+
       switch (true) {
-        case prevDistance === undefined:
-          return replies.say(`Расстояние до объекта ${distance} метров`, `Клубок покатился`, distance);
-        case distance > prevDistance:
-          return replies.say(`Расстояние до объекта ${distance} метров`, `Холоднее`, distance);
-        case distance === prevDistance:
-          return replies.say(`Расстояние до объекта ${distance} метров`, `Вы стоите на месте`, distance);
-        case distance < prevDistance:
-          if (distance < 100) return replies.say(`Расстояние до объекта ${distance} метров`, `Горячо`, distance);
-          if (distance < 300) return replies.say(`Расстояние до объекта ${distance} метров`, `Тепло`, distance);
-          if (distance > 300) return replies.say(`Расстояние до объекта ${distance} метров`, `Теплее`, distance);
-        // case intent.includes("YANDEX.CONFIRM"):
-        //   console.log("user agree");
-        //   break;
-        // case intent.includes("YANDEX.REJECT"):
-        //   console.log("user disagree");
-        //   break;
+        // пользователь возле объекта
+        case distance < 100 && !context:
+          return replies.yesNoQuestion(
+            'Вижу что ты находишься у ворот Кремлёвских. Рассказать про Кремль подробнее?',
+            'Вижу что ты находишься у ворот Кремлёвских. Рассказать про Кремль подробнее?',
+             'startKremlin');
+        case intent.includes("YANDEX.CONFIRM"):
+          console.log("the user agrees");
+          if(context === 'startKremlin') return storyKremlin('startQuest')
+          if(context === 'startQuest') return storyBegin('stageOneStory');
+          if(context === 'stageOneStory') return storyOneT('stageOne');
+          break;
+        case intent.includes("YANDEX.REJECT"):
+          console.log("the user disagrees");
+          if(context === 'startKremlin') return storyBegin('stageOneStory');
+          if(context === 'startQuest') return replies.bye();
+          if(context === 'stageOneStory') return replies.quest('Кто тут пожаловал? Ах-ха-ха', 'step1');
+          break;
+        case intent.includes("location"):
+          console.log("the user is near the object");
+          if(context === 'stageOne') return replies.quest('Кто тут пожаловал? Ах-ха-ха', 'step1');
+        
+          break;
         default:
           return replies.fallback(command);
       }
+
     } else {
-      return replies.askGeo(welcome);
+      if(context === 'requestGeolocation') return replies.bye('Без доступа к геолокации сыграть не выйдет.');
+      return replies.askGeo(isNewSession);
     }
 
 
@@ -70,3 +81,18 @@ server.listen(PORT, () =>
     `Server started on http://localhost:${PORT}, tunnel: http://localhost:4040`
   )
 );
+
+function storyKremlin(stage) {
+  const {txt, tts=txt} = KREMLIN;
+  return replies.yesNoQuestion(txt, tts, stage)
+}
+
+function storyBegin(stage) {
+  const {txt, tts=txt} = INTRO;
+  return replies.yesNoQuestion(txt, tts, stage)
+}
+
+function storyOneT(stage) {
+  const {txt, tts=txt} = ONETYEAR;
+  return replies.iAmHereQuestion(txt, tts, stage)
+}

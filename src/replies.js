@@ -1,4 +1,4 @@
-const { ASKGEO } = require("./phrases");
+const { WELCOME, ASKGEO, KREMLIN } = require("./phrases");
 
 //#region 
 /**
@@ -157,7 +157,7 @@ function makeResponse({
     version: '1.0',
   };
 
-  console.log("response:", JSON.stringify(response));
+  console.log(">>response:", JSON.stringify(response));
   return response;
 }
 
@@ -171,9 +171,9 @@ exports.clearUserState = (userState) => {
 
 exports.askGeo = (welcome) => {
   const directives = { request_geolocation: {} };
-  // const { txt } = ASKGEO;
-  const text = welcome + "\n" + "нужен доступ";
-  return makeResponse({ text, directives });
+  const text = welcome ? `${WELCOME.txt} \n ${ASKGEO.txt}` : `${ASKGEO.txt}`;
+  const tts = welcome ? `${WELCOME.tts} \n ${ASKGEO.tts}` : `${ASKGEO.tts}`;
+  return makeResponse({ text, tts, directives, context:'requestGeolocation' });
 }
 
 exports.say = (text, tts, prevDistance) => {
@@ -236,7 +236,31 @@ function deg2rad(deg) {
   return deg * (Math.PI / 180);
 }
 
-exports.fallback = (command) => {
-  const text = `Вы сказали ${command}. Команда не распознана`;
+exports.fallback = (command = "") => {
+  const text = `Вы сказали ${command}. Команда не распознана. Попробуйте переформулировать`;
   return makeResponse({ text });
 }
+
+exports.bye = (text = "") => {
+  return makeResponse({ text: text += ` Ну чтож. Увидимся в следующий раз` , endSession: true });
+}
+
+exports.yesNoQuestion = (question, tts = question, context) => {
+  const text = question;
+  const buttons = [{ title: "Да", hide: true }, { title: "Нет", hide: true }];
+  return makeResponse({ text, tts, context, buttons });
+}
+
+exports.iAmHereQuestion = (question, tts, context) => {
+  const text = question;
+  const buttons = [{ title: "Я на месте", hide: true }];
+  return makeResponse({ text, tts, context, buttons });
+}
+
+exports.quest = (question, context) => {
+  const text = question;
+  const buttons = [{ title: "Я не знаю", hide: true }];
+  return makeResponse({ text, context, buttons });
+}
+
+
