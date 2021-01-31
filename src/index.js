@@ -20,13 +20,14 @@ const server = micro(async (req, res) => {
 
 
   function handler(session, request, state) {
-    const { location } = session;
+    const { location, user: {user_id} } = session;
     const { session: { context }, application} = state;
     const { type, command, nlu } = request;
     const intent = nlu && nlu.intents ? Object.keys(nlu.intents) : [];
 
-    console.log(">>request:", JSON.stringify(request));
-    console.log(">>state:", JSON.stringify(state));
+    console.log(`>> request:`, JSON.stringify(request),);
+    console.log(`>> state:`, JSON.stringify(state));
+    console.log(`>> session:`, JSON.stringify(session));
 
     const isNewSession = session.new;
 
@@ -41,7 +42,8 @@ const server = micro(async (req, res) => {
         case distance < 100 && !context:
           return replies.yesNoQuestion(
             'Вижу что ты находишься у ворот Кремлёвских. Рассказать про Кремль подробнее?',
-            'Вижу что ты находишься у ворот Кремлёвских. Рассказать про Кремль подробнее?',
+            'Вижу что ты находишься у ворот Кремлёвских. Рассказать про Кремль подробнее?', 
+            false,
              'startKremlin');
         case intent.includes("YANDEX.CONFIRM"):
           console.log("the user agrees");
@@ -53,13 +55,15 @@ const server = micro(async (req, res) => {
           console.log("the user disagrees");
           if(context === 'startKremlin') return storyBegin('stageOneStory');
           if(context === 'startQuest') return replies.bye();
-          if(context === 'stageOneStory') return replies.quest('Кто тут пожаловал? Ах-ха-ха', 'step1');
+          if(context === 'stageOneStory') return replies.quest('Для продолжения перейди по ссылке', 'step1');
           break;
         case intent.includes("location"):
           console.log("the user is near the object");
-          if(context === 'stageOne') return replies.quest('Кто тут пожаловал? Ах-ха-ха', 'step1');
-        
+          if(context === 'stageOne') return replies.quest('Для продолжения перейди по ссылке', 'step1');
           break;
+        case intent.includes("restart"):
+          console.log("the user wants to starover");
+          return replies.restart();
         default:
           return replies.fallback(command);
       }
@@ -83,13 +87,13 @@ server.listen(PORT, () =>
 );
 
 function storyKremlin(stage) {
-  const {txt, tts=txt} = KREMLIN;
-  return replies.yesNoQuestion(txt, tts, stage)
+  const {txt, tts=txt, card} = KREMLIN;
+  return replies.yesNoQuestion(txt, tts, card, stage)
 }
 
 function storyBegin(stage) {
   const {txt, tts=txt} = INTRO;
-  return replies.yesNoQuestion(txt, tts, stage)
+  return replies.yesNoQuestion(txt, tts, false, stage)
 }
 
 function storyOneT(stage) {
