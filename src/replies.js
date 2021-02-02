@@ -1,36 +1,37 @@
 const { WELCOME, ASKGEO, KREMLIN } = require("./phrases");
+const sights = require("./sights");
 
 function makeResponse({
   text = "",
   tts = "",
   card = false,
-  buttons = [],
+  buttons = false,
   endSession = false,
-  directives = {},
-  context = "",
-  userStateUpdate = {},
-  sightId = "",
-  level = "",
-  prevDistance = "",
+  directives = false,
+  context = false,
+  userStateUpdate = false,
+  target = false,
 }) {
-  const response = {
+  let response = {
     response: {
       text: text,
       tts: tts ? tts : text,
-      buttons: buttons,
       end_session: endSession,
-      directives: directives,
     },
-    session_state: {
-      context: context,
-      prevDistance: prevDistance,
-    },
-    user_state_update: userStateUpdate,
     version: '1.0',
   };
 
-  console.log(">>response:", JSON.stringify(response));
+  if(userStateUpdate) response['user_state_update'] = userStateUpdate;
+  if(target || context) {
+    response['session_state']={};
+    if(target) response.session_state['target'] = {target: target};
+    if(context) response.session_state['context'] = {context: context};
+  }
   if(card) response.response['card'] = card;
+  if(directives) response.response['directives'] = directives;
+  if(buttons) response.response['buttons'] = buttons;
+
+  console.log(">>response:", JSON.stringify(response));
   return response;
 }
 
@@ -41,12 +42,23 @@ exports.clearUserState = (userState) => {
   return makeResponse({ text, userStateUpdate });
 }
 
+exports.saveTarget = (target) => {
+  const {distance} = target;
+  const text =`Есть`;
+  return makeResponse({ text, target });
+}
+
 
 exports.askGeo = (welcome) => {
   const directives = { request_geolocation: {} };
-  const text = welcome ? `${WELCOME.txt} \n ${ASKGEO.txt}` : `${ASKGEO.txt}`;
-  const tts = welcome ? `${WELCOME.tts} \n ${ASKGEO.tts}` : `${ASKGEO.tts}`;
-  return makeResponse({ text, tts, directives });
+  const hi = welcome ? `Привет странник. Я проведу тебя до места заветного. Если потеряшься спроси "Далёко ещё?" или "Где я?". Если надоест блуждать скажи "Хватит" \n` : '';
+  const text = `Дай мне свой компас, прошу. Я потом обязательно верну его, в целости и сохранности`;
+  return makeResponse({ text: hi + text, directives });
+}
+
+exports.forestallGeo = () => {
+  const userStateUpdate = {isGeoAllowed: false};
+  return makeResponse({ text, userStateUpdate });
 }
 
 exports.say = (text, tts, prevDistance) => {
@@ -58,26 +70,28 @@ exports.sayGeo = (location) => {
   const { lat, lon, accuracy } = location;
   const context = "sayGeo";
   const buttons = [
-    { title: "Сохранить", hide: true },
-    { title: "Далее", hide: true },
+    { title: "Где я?", hide: true },
+    { title: "Далеко ещё?", hide: true },
+    { title: "Хватит?", hide: true },
   ];
-  const text = `Ваши координаты: ${lat} северной долготы, ${lon} южной широты. Погрешность ${accuracy}`;
+  const text = `Ваши координаты: ${lat.toFixed(2)} северной долготы, ${lon.toFixed(2)} южной широты. Погрешность ${Math.round(accuracy)}`;
   return makeResponse({ text, context, buttons });
 }
 
-exports.sayDistance = (userLocation, targetLocation) => {
+exports.sayDistance = (userLocation, targetLocation, targetName) => {
   const { lat, lon, accuracy } = userLocation;
   const { lat: lat1, lon: lon1 } = targetLocation;
   const distance = Math.trunc(
     getDistanceFromLatLonInKm(lat, lon, lat1, lon1) * 1000
   );
   const context = "sayDistance";
-  const buttons = [{ title: "Далее", hide: true }];
-  const text = `Расстояние до объекта ${distance} ± ${Math.trunc(accuracy)} метров`;
+  const buttons = [{ title: "А теперь?", hide: true }];
+  const text = `До ${targetName} осталось ещё ${distance} ± ${Math.trunc(accuracy)} метров`;
   return makeResponse({ text, context, buttons });
 }
 
-exports.getDistance = (userLocation, targetLocation) => {
+function getDistance (userLocation, targetLocation) {
+  // console.log(targetLocation)
   const { lat, lon, accuracy } = userLocation;
   const { lat: lat1, lon: lon1 } = targetLocation;
   const distance = Math.trunc(
@@ -138,6 +152,18 @@ exports.quest = (question, context) => {
 
 exports.restart = () => {
   return makeResponse({ text: 'Начинаю заново', context: ''});
+}
+
+
+exports.getNearest = (userLocation) => {
+  distances = Object.keys(sights.sights).map(key => {
+    const name = sights.sights[key].name;
+    const {distance} = getDistance(userLocation, sights.sights[key].location);
+    // console.log(`расстояние до ${name} составляет ${distance} метров`)
+    return {key, distance};
+  })
+  const nearest = distances.reduce((prev, curr) => prev.distance < curr.distance ? prev : curr);
+  return sights.sights[nearest.key];
 }
 
 

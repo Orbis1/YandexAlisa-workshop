@@ -1,18 +1,6 @@
 const micro = require("micro");
 const handler = require('./handler');
 
-// достопримечательности с координатами
-const sights = {
-  1: {
-    name: "Перекрёсток в парке",
-    location: {
-      lat: 59.911768,
-      lon: 30.508970,     
-    },
-    isVisited: false,
-  },
-};
-
 const server = micro(async (req, res) => {
   const { session, request, state } = await micro.json(req);
   return handler.handler(session, request, state);
